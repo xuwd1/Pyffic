@@ -1,5 +1,4 @@
 import ctypes
-from enum import Enum
 from . import ffi_common
 from . import ffi_typing
 from . import ffi_callables

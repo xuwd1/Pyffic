@@ -1,6 +1,5 @@
 import ctypes
 from . import ffi_common
-from .ffi_typing import SigElementDescriptor
 import numpy as np
 
 def generate_callables(lib):

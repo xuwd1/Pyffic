@@ -1,7 +1,18 @@
 # Pyffic
+## Table of Contents
+- [Pyffic](#pyffic)
+  - [Table of Contents](#table-of-contents)
+  - [What is Pyffic?](#what-is-pyffic)
+  - [Requirements](#requirements)
+  - [Usage](#usage)
+    - [Cpp Side Preparations](#cpp-side-preparations)
+    - [Python Side Preparations](#python-side-preparations)
+    - [Global Functions](#global-functions)
+    - [Classes](#classes)
+  - [Limitations](#limitations)
 
 ## What is Pyffic?
-Pyffic is a simple yet useful Cpp-Python FFI(Foreign Function Interface) system. Pyffic consists of two components: **ffi_man** on Cpp side and **pyffi** on Python side. 
+Pyffic is a simple yet useful Cpp-Python FFI (Foreign Function Interface) system. Pyffic consists of two components: **ffi_man** on Cpp side and **pyffi** on Python side. 
 
 **ffi_man** allows you to[^1]: 
 
@@ -26,19 +37,19 @@ Pyffic is a simple yet useful Cpp-Python FFI(Foreign Function Interface) system.
   -  Because for a Cpp function/method that has pointer parameters, **pyffi** would expect  `numpy.ndarray`s as argument
 
 ## Usage
-### Cpp side Preparations
+### Cpp Side Preparations
 
 1. Include `path/to/Pyffic/cpp/ffi_man.hpp` in your Cpp source files. Note that `ffi_man.hpp` will include all the header files under `path/to/Pyffic/cpp/siggen` so you also would need to ensure that your compiler could find them. It is recommended to keep the directory structure of `Pyffic/cpp` for convenience.
 2. Add `path/to/Pyffic/cpp/ffi_man.cpp` to your Cpp source file list.
 
-### Python side Preparations
+### Python Side Preparations
 
 1. Add `path/to/Pyffic/pyffi` to your `$PYTHONPATH` to allow your Python interpreter find **pyffi**
 2. If you use Python environment manager like `conda`, make sure that your environment interpreter could find **pyffi**
 3. Test if `import pyffi` is working
 
 
-### Global Function Registering
+### Global Functions
 **1. normal global functions**
 ```cpp
 //Cpp side code that compiles to lib.so
@@ -130,8 +141,57 @@ array = np.array([1,2,3,4,5,0,0,0],dtype = np.uint32)
 result = count_zeros(array) #gives 3
 ```
 
+### Classes
+**1.Class constructor and destructor**
+```cpp
+//Cpp side code that compiles to lib.so
+#include "ffi_man.hpp"
+class fooclass{
+public:
+    fooclass(float spd, int cnt):speed(spd),count(cnt){
+    }
+    ~fooclass(){
+    }
+    float speed;
+    int count;
+};
+
+// in Cpp getting constructor/destructor addr is strictly prohibited
+// so we have to wrap them ourselves. 
+fooclass* create_fooclass(float spd, int cnt){
+    auto ptr = new fooclass(spd,cnt);
+    std::printf("created fooclass!\n");
+    return ptr;
+}
+
+void destroy_fooclass(fooclass* fc){
+    delete fc;
+    printf("deleted fooclass\n");
+}
+
+FFI_REGISTER_CLASS(fooclass, "fooclass", create_fooclass, destroy_fooclass);
+```
+```python
+#Python side code
+import pyffi
+
+# this is the ffi manager instance for lib.so
+lib = pyffi.Lib("./class.so")
+class FooClass(lib.FFIClassBase):
+    # you have to provide cffi_registered_name manually
+    cffi_registered_name = "fooclass"
+    def __init__(self, spd,cnt) -> None:
+        super().__init__(spd,cnt)
+
+foo = FooClass(100,5)
+# running the script gives 
+# created fooclass!
+# deleted fooclass
+```
+
 To be Continued in the following commits.
-You could also check `Pyffic/testing`
+
+You could also check `Pyffic/testing`.
 
 
 ## Limitations
