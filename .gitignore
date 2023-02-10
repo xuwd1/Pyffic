@@ -3,3 +3,4 @@
 __pycache__
 *.so
 *.o
+compile_flags.txt

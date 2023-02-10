@@ -34,7 +34,7 @@ Pyffic is a simple yet useful Cpp-Python FFI (Foreign Function Interface) system
   - This is because **ffi_man** used some C++20 specifiers such as `consteval`. Actually its core functionalities only require C++14 to work. 
 - On Python side, pyffic requires python >= 3.6, and numpy
   -  Because for **pyffi** to work it requires `__init_subclass__` magic method, which is available only in python >= 3.6
-  -  Because for a Cpp function/method that has pointer parameters, **pyffi** would expect  `numpy.ndarray`s as argument
+  -  Because for a Cpp function/method that has pointer type parameters (except for `const char*`), **pyffi** would expect  `numpy.ndarray`s as arguments
 
 ## Usage
 ### Cpp Side Preparations
@@ -118,7 +118,7 @@ uint64_t count_zeros(uint32_t* array, uint64_t n){
 }
 FFI_REGISTER_GLOBAL_FUNCTION(count_zeros, "count_zeros");
 ```
-Note that pyffi would always expect a numpy.ndarray object for Cpp pointer parameters!
+Note that pyffi would always expect a numpy.ndarray object for Cpp pointer type parameters other than `const char*`
 ```python
 #Python side code
 import pyffi
@@ -144,7 +144,7 @@ result = count_zeros(array) #gives 3
 ### Classes
 **1.Class constructor and destructor**
 ```cpp
-//Cpp side code that compiles to lib.so
+//Cpp side code that compiles to class.so
 #include "ffi_man.hpp"
 class fooclass{
 public:
@@ -175,7 +175,7 @@ FFI_REGISTER_CLASS(fooclass, "fooclass", create_fooclass, destroy_fooclass);
 #Python side code
 import pyffi
 
-# this is the ffi manager instance for lib.so
+# this is the ffi manager instance for class.so
 lib = pyffi.Lib("./class.so")
 class FooClass(lib.FFIClassBase):
     # you have to provide cffi_registered_name manually
@@ -189,10 +189,196 @@ foo = FooClass(100,5)
 # deleted fooclass
 ```
 
-To be Continued in the following commits.
+**2.Class fields and methods I**
 
-You could also check `Pyffic/testing`.
+Continuing from the previous example, we add a class method `double speed` which, well, doubles the `speed` value of `fooclass` and register both the method and field:
+```cpp
+//Cpp side code that compiles to class_1.so
+#include "ffi_man.hpp"
+class fooclass{
+public:
+    fooclass(float spd, int cnt):speed(spd),count(cnt){
+    }
+    ~fooclass(){
+    }
+    void double_speed(){
+        speed = speed*2;
+    }
+    float speed;
+    int count;
+};
+
+fooclass* create_fooclass(float spd, int cnt){
+    auto ptr = new fooclass(spd,cnt);
+    std::printf("created fooclass!\n");
+    return ptr;
+}
+
+void destroy_fooclass(fooclass* fc){
+    delete fc;
+    printf("deleted fooclass\n");
+}
+
+FFI_REGISTER_CLASS(fooclass, "fooclass", create_fooclass, destroy_fooclass);
+FFI_REGISTER_CLASS_FIELD(fooclass, speed, fooclass::speed, "fooclass.speed");
+FFI_REGISTER_CLASS_METHOD(&fooclass::double_speed, "fooclass.double_speeed");
+```
+
+There are two ways to use the registered methods and fields at Python side. When defining `FooClass`, **pyffi** will check if the class already has attributes having the same name as the methods' and the fields' registered name. If not, we could directly access the methods and the fields using their registered names:
+
+```python
+#Python side code
+import pyffi
+
+lib = pyffi.Lib("./class_1.so")
+class FooClass(lib.FFIClassBase):
+    cffi_registered_name = "fooclass"
+    def __init__(self, spd,cnt) -> None:
+        super().__init__(spd,cnt)
+
+foo = FooClass(100,5)
+print("foo's speed is {}".format(foo.speed))
+foo.speed = 789
+print("foo's new speed is {}".format(foo.speed))
+foo.double_speed()
+print("foo's doubled new speed is {}".format(foo.speed))
+
+# gives:
+# foo's speed is 100.0
+# foo's new speed is 789.0
+# foo's doubled new speed is 1578.0
+```
+
+However if **pyffi** found that there are attributes with the same name as the methods and the fields registered name, the binding names of them would have a prefix `_`. This is useful if you would like to further wrap them or you just don't like the aforementioned implicit way:
+
+```python
+#Python side code
+import pyffi
+
+lib = pyffi.Lib("./class_1.so")
+class FooClass(lib.FFIClassBase):
+    cffi_registered_name = "fooclass"
+    def __init__(self, spd,cnt) -> None:
+        super().__init__(spd,cnt)
+        
+    def double_speed(self):
+        # since attr "double_speed" already exists
+        # pyffi now binds the method with a prefix
+        return self._double_speed()
+    
+    @property
+    def speed(self):
+        # same for class fields
+        return self._speed
+    
+    @speed.setter
+    def speed(self,value):
+        self._speed = value
+
+foo = FooClass(100,5)
+print("foo's speed is {}".format(foo.speed))
+foo.speed = 789
+print("foo's new speed is {}".format(foo.speed))
+foo.double_speed()
+print("foo's doubled new speed is {}".format(foo.speed))
+
+# gives:
+# foo's speed is 100.0
+# foo's new speed is 789.0
+# foo's doubled new speed is 1578.0
+```
+
+**3.Class fields and methods II**
+
+We now declare another class called `anotherclass`, slightly modify our `fooclass` to contain a pointer to an `anotherclass` object, and observe how **pyffi** could handle this:
+
+```cpp
+//Cpp side code that compiles to class_2.so
+class anotherclass{
+public:
+    anotherclass(uint32_t a, uint32_t b):a(a),b(b){}
+    uint32_t a;
+    uint32_t b;
+};
+
+anotherclass* create_anaclass(uint32_t a, uint32_t b){
+    auto ptr = new anotherclass(a,b);
+    std::printf("created anotherclass!\n");
+    return ptr;
+}
+
+void destroy_anaclass(anotherclass* ptr){
+    delete ptr;
+    printf("deleted anotherclass\n");
+}
+
+FFI_REGISTER_CLASS(anotherclass, "anotherclass", create_anaclass, destroy_anaclass)
+FFI_REGISTER_CLASS_FIELD(anotherclass, a, anotherclass::a, "anotherclass.a")
+
+
+class fooclass{
+public:
+    fooclass(uint32_t a, uint32_t b){
+        other = new anotherclass(a,b);
+    }
+    ~fooclass(){
+        delete other;
+    }
+    anotherclass* other;
+};
+
+fooclass* create_fooclass(float spd, int cnt){
+    auto ptr = new fooclass(spd,cnt);
+    std::printf("created fooclass!\n");
+    return ptr;
+}
+
+void destroy_fooclass(fooclass* fc){
+    delete fc;
+    printf("deleted fooclass\n");
+}
+
+FFI_REGISTER_CLASS(fooclass, "fooclass", create_fooclass, destroy_fooclass);
+FFI_REGISTER_CLASS_FIELD(fooclass, other, fooclass::other, "fooclass.other")
+
+```
+We define the two classes counterpart in Python:
+
+```python
+#Python side code
+import pyffi
+
+lib = pyffi.Lib("./class_2.so")
+class FooClass(lib.FFIClassBase):
+    cffi_registered_name = "fooclass"
+    def __init__(self, a,b) -> None:
+        super().__init__(a,b)
+        
+class AnotherClass(lib.FFIClassBase):
+    cffi_registered_name = "anotherclass"
+    def __init__(self, a,b) -> None:
+        super().__init__(a,b)
+
+foo = FooClass(6,7)
+print(foo.other)
+print(foo.other.a)
+
+# gives:
+# created fooclass!
+# <__main__.AnotherClass object at 0x7fef932d2a40>
+# 6
+
+```
+
+We could see that **pyffi** could properly handle this case. However, note that **pyffi** ***always assumes*** that only Python objects that are instantiated directly from `__init__` function ***owns*** the actual Cpp object. Python objects instantiated from class fields (like the above example), function return values are ***not*** considered to own the Cpp object.
+
+
+
+
+You could also check `Pyffic/testing` for above examples' source code.
 
 
 ## Limitations
-To be written...
+
+1. Passing raw pointers in **pyffi** is prohibited
+2. **pyffi** will only accept pointer types that has a single level of indirection. (that is, pointers to pointer are not allowed) 

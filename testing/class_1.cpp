@@ -2,23 +2,16 @@
 #include <cstdio>
 #include <cstdint>
 
+
 class fooclass{
 public:
     fooclass(float spd, int cnt):speed(spd),count(cnt){
     }
     ~fooclass(){
     }
-    //void count_zero(uint32_t* array, size_t n){
-    //    count = 0;
-    //    for (size_t i=0; i<n; i++){
-    //        if (array[i]==0){
-    //            count++;
-    //        }
-    //    }
-    //}
-    //float double_speed(){
-    //    return speed*2;
-    //}
+    void double_speed(){
+        speed = speed*2;
+    }
     float speed;
     int count;
 };
@@ -37,3 +30,5 @@ void destroy_fooclass(fooclass* fc){
 }
 
 FFI_REGISTER_CLASS(fooclass, "fooclass", create_fooclass, destroy_fooclass);
+FFI_REGISTER_CLASS_FIELD(fooclass, speed, fooclass::speed, "fooclass.speed");
+FFI_REGISTER_CLASS_METHOD(&fooclass::double_speed, "fooclass.double_speed");

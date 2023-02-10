@@ -67,6 +67,7 @@ def generate_classbase(lib):
         _method_callables = None
         _fields = None
         _lib = lib
+        _own = False
         
         # __new__的行为：
         # 
@@ -130,15 +131,16 @@ def generate_classbase(lib):
                         field_name = field_cffi_registered_name.split(".")[-1]
                         cls._fields[field_name] = \
                             FFIClassFieldDescriptor(cls,field_cffi_registered_name)
-            a=1 
         
         #use init to create both python object and cpp object
         def __init__(self,*args) -> None:
+            self._own = True
             self._ptr = self._constructor(*args)
             
         def __del__(self):
-            if self._ptr is not None:
+            if self._ptr is not None and self._own:
                 self._destructor(self._ptr)
+                
     return FFIClassBase
 
 
