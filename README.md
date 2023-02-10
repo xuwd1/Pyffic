@@ -17,16 +17,16 @@ Pyffic is a simple yet useful Cpp-Python FFI (Foreign Function Interface) system
 **ffi_man** allows you to[^1]: 
 
 1. Register global functions by recording their registered names, addresses, and generating compile time strings that represent the functions' signatures. (for example, a Cpp function declared as `uint32_t func(fooclass* ptr, int8_t)` corresponds to a compile time signature string `":*fooclass:i8;u32"`.) When your Cpp programs are compiled to shared libs, these information could help external programs that load the shared libs know how the functions could be called under specific ABI, avoiding the Cpp name mangling problem.
-2. Register custom Cpp classes by recording their registered name, constructor, and destructor. (for example, registering a class named `fooclass` by using macro `FFI_REGISTER_CLASS(fooclass, "fooclass", create_fooclass, destroy_fooclass);`) These information could help external programs written in different language to create the Cpp classes' counterpart objects. Besides, the registered name of the Cpp class could also be used to generate compile time function signature mentioned in 1.
-3. Register custom Cpp class fields by recording their registered name, offset, and compile time type string. (for example, registering a class field `fooclass::speed` by using macro `FFI_REGISTER_CLASS_FIELD(fooclass, speed, fooclass::speed, "fooclass.speed");`) These information could help external programs to access or modify the class value.
-4. Register custom Cpp class methods by generating method wrappers, recording wrapper signatures, and wrapper addresses. (for example, registering a class method `fooclass::double_speed` by using macro `FFI_REGISTER_CLASS_METHOD(&fooclass::double_speed, "fooclass.double_speed");`) These information could help external programs to call the class methods.
+2. Register custom Cpp classes by recording their registered name, constructor, and destructor. (for example, registering a class named `fooclass` by using macro `FFI_REGISTER_CLASS(fooclass, "fooclass", create_fooclass, destroy_fooclass);`) These information could help external programs written in different language create the Cpp classes' counterpart objects. Besides, the registered name of the Cpp class could also be used to generate compile time function signature string mentioned in 1.
+3. Register custom Cpp class fields by recording their registered name, offset, and compile time type string. (for example, registering a class field `fooclass::speed` by using macro `FFI_REGISTER_CLASS_FIELD(fooclass, speed, fooclass::speed, "fooclass.speed");`) These information could help external programs access or modify the class value.
+4. Register custom Cpp class methods by generating method wrappers, recording wrapper signatures, and wrapper addresses. (for example, registering a class method `fooclass::double_speed` by using macro `FFI_REGISTER_CLASS_METHOD(&fooclass::double_speed, "fooclass.double_speed");`) These information could help external programs call the class methods.
 
 [^1]: from the above statements you could see that **ffi_man** could also be used to establish a FFI system other than a Python-Cpp one.
 
 **pyffi** allows you to:
 
 1. Easily define a Cpp global function counterpart in Python, by automatically reading the **ffi_man**'s recorded information and performing argument conversion, function calling and return value conversion.
-2. Easily define a Cpp class counterpart in Python, by automatically reading the **ffi_man**'s recorded information, creating proper Python `__init__` function, `__del__` function, normal class methods and descriptors that handle class field accesses.
+2. Easily define a Cpp class counterpart in Python, by automatically reading the **ffi_man**'s recorded information, creating proper Python `__init__` function, `__del__` function, normal class methods and descriptors that take care of class field accesses.
 
 
 ## Requirements
@@ -44,7 +44,7 @@ Pyffic is a simple yet useful Cpp-Python FFI (Foreign Function Interface) system
 
 ### Python Side Preparations
 
-1. Add `path/to/Pyffic/pyffi` to your `$PYTHONPATH` to allow your Python interpreter find **pyffi**
+1. Add `path/to/Pyffic` to your `$PYTHONPATH` to allow your Python interpreter find **pyffi**
 2. If you use Python environment manager like `conda`, make sure that your environment interpreter could find **pyffi**
 3. Test if `import pyffi` is working
 
@@ -191,7 +191,7 @@ foo = FooClass(100,5)
 
 **2.Class fields and methods I**
 
-Continuing from the previous example, we add a class method `double speed` which, well, doubles the `speed` value of `fooclass` and register both the method and field:
+Continuing from the previous example, we add a class method `double_speed` which, well, doubles the field `speed`'s value of `fooclass` and register both the method and field:
 ```cpp
 //Cpp side code that compiles to class_1.so
 #include "ffi_man.hpp"
@@ -224,7 +224,7 @@ FFI_REGISTER_CLASS_FIELD(fooclass, speed, fooclass::speed, "fooclass.speed");
 FFI_REGISTER_CLASS_METHOD(&fooclass::double_speed, "fooclass.double_speeed");
 ```
 
-There are two ways to use the registered methods and fields at Python side. When defining `FooClass`, **pyffi** will check if the class already has attributes having the same name as the methods' and the fields' registered name. If not, we could directly access the methods and the fields using their registered names:
+There are two ways to use the registered methods and fields at Python side. When defining `FooClass`, **pyffi** will check if the class already has attributes having the same name as the methods' or the fields' registered name. If not, we could directly access the methods and the fields using their registered names:
 
 ```python
 #Python side code
@@ -249,7 +249,7 @@ print("foo's doubled new speed is {}".format(foo.speed))
 # foo's doubled new speed is 1578.0
 ```
 
-However if **pyffi** found that there are attributes with the same name as the methods and the fields registered name, the binding names of them would have a prefix `_`. This is useful if you would like to further wrap them or you just don't like the aforementioned implicit way:
+However if **pyffi** found that there are attributes with the same name as the methods and the fields registered name, the binding names of them would have a prefix `_`. This is useful if you would like to further wrap them or if you just don't like the aforementioned implicit way:
 
 ```python
 #Python side code
@@ -290,7 +290,7 @@ print("foo's doubled new speed is {}".format(foo.speed))
 
 **3.Class fields and methods II**
 
-We now declare another class called `anotherclass`, slightly modify our `fooclass` to contain a pointer to an `anotherclass` object, and observe how **pyffi** could handle this:
+We now declare another class called `anotherclass`, slightly modify our `fooclass` to contain a pointer to an `anotherclass` object, and observe if **pyffi** could handle this:
 
 ```cpp
 //Cpp side code that compiles to class_2.so
@@ -370,7 +370,7 @@ print(foo.other.a)
 
 ```
 
-We could see that **pyffi** could properly handle this case. However, note that **pyffi** ***always assumes*** that only Python objects that are instantiated directly from `__init__` function ***owns*** the actual Cpp object. Python objects instantiated from class fields (like the above example), function return values are ***not*** considered to own the Cpp object.
+We see that **pyffi** could properly handle this case. However, note that **pyffi** ***always assumes*** that only Python objects that are instantiated directly from `__init__` function ***owns*** the actual Cpp object. Python objects instantiated from class fields (like the above example), function return values are ***not*** considered to own the Cpp object.
 
 
 
