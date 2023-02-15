@@ -1,4 +1,6 @@
 # Pyffic
+
+![pyffic](./icon.png)
 ## Table of Contents
 - [Pyffic](#pyffic)
   - [Table of Contents](#table-of-contents)
